@@ -1,3 +1,5 @@
+use std::process::{Command, Stdio};
+
 use anyhow::{Ok, Result};
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::prelude::*;
@@ -6,6 +8,7 @@ use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::DefaultTerminal;
 
 use crate::client::Client;
+use crate::config::CONFIG;
 use crate::input::Input;
 use crate::list::OptionsList;
 use crate::server::Servers;
@@ -143,13 +146,40 @@ impl App<'_> {
                         }
                     };
 
-                    match open::that(episode_link) {
-                        Err(e) => {
-                            self.errors.push(e.to_string());
-                            return;
+                    match CONFIG.lock().unwrap().get_frontend() {
+                        crate::frontend::Frontend::Brave => {
+                            match open::with(episode_link, "brave") {
+                                Err(e) => {
+                                    self.errors.push(e.to_string());
+                                    return;
+                                }
+                                _ => (),
+                            };
                         }
-                        _ => (),
-                    };
+                        crate::frontend::Frontend::DefaultBrowser => {
+                            match open::that(episode_link) {
+                                Err(e) => {
+                                    self.errors.push(e.to_string());
+                                    return;
+                                }
+                                _ => (),
+                            };
+                        }
+                        crate::frontend::Frontend::Mpv => {
+                            match Command::new("mpv")
+                                .args(["--really-quiet", "--fullscreen", &episode_link])
+                                .stdout(Stdio::null())
+                                .stderr(Stdio::null())
+                                .spawn()
+                            {
+                                Err(e) => {
+                                    self.errors.push(e.to_string());
+                                    return;
+                                }
+                                _ => (),
+                            };
+                        }
+                    }
                 }
             }
         }

@@ -39,6 +39,10 @@ impl Servers {
             Server::AnimeFlv => Server::AnimeFlv,
         };
 
+        CONFIG
+            .lock()
+            .unwrap()
+            .set_client(self.current_server.clone());
         Servers::generate_current_client(&self.current_server)
     }
 
@@ -47,12 +51,14 @@ impl Servers {
             Server::AnimeFlv => Server::AnimeFlv,
         };
 
+        CONFIG
+            .lock()
+            .unwrap()
+            .set_client(self.current_server.clone());
         Servers::generate_current_client(&self.current_server)
     }
 
     pub fn generate_current_client(server: &Server) -> Box<dyn Client> {
-        CONFIG.set_client(server.clone());
-
         Box::new(match server {
             Server::AnimeFlv => animeflv::AnimeFlv::default(),
         })

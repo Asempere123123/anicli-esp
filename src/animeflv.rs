@@ -2,7 +2,7 @@ use anyhow::{Ok, Result};
 use reqwest::blocking;
 use scraper::{Html, Selector};
 
-use crate::client::Client;
+use crate::{client::Client, config::CONFIG, frontend::Frontend};
 
 #[derive(Default)]
 pub struct AnimeFlv {
@@ -97,7 +97,12 @@ impl Client for AnimeFlv {
         let response = blocking::get(url)?;
         let text = response.text()?;
 
-        let pattern = r#""server":"sw""#;
+        let pattern;
+        if CONFIG.lock().unwrap().get_frontend() == Frontend::Mpv {
+            pattern = r#""server":"yu""#;
+        } else {
+            pattern = r#""server":"sw""#;
+        }
         let start_idx = text.find(pattern).ok_or(std::io::Error::new(
             std::io::ErrorKind::NotFound,
             "SW service not found",
