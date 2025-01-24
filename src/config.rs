@@ -66,6 +66,7 @@ impl Config {
 
         let config = serde_json::to_string_pretty(self).expect("Could not serialize config");
 
+        std::fs::create_dir_all(config_dir).expect("Could not write config");
         std::fs::write(config_dir.join("config.json"), &config).expect("Could not write config");
     }
 
