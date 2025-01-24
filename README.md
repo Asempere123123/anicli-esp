@@ -12,3 +12,13 @@ Se puede instalar desde cargo
 ```bash
 cargo install anicli-esp
 ```
+
+# Uso
+## Conifgurar
+La primera vez que se abre permite elegir que aplicación se utilizará para abrir el video. Esto se puede cambiar mas adelante abriendolo con el argumento --config.
+```bash
+anicli-esp -c
+anicli-esp --config
+```
+## Interfaz
+Con el tabulador y shift + tabulador se puede cambiar la ventana seleccionada. El enter permite selecionar una opción.
