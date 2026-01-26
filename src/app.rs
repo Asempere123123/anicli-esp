@@ -167,7 +167,11 @@ impl App<'_> {
                         }
                         crate::frontend::Frontend::Mpv => {
                             match Command::new("mpv")
-                                .args(["--really-quiet", "--fullscreen", &episode_link])
+                                .args([
+                                    "--ytdl-raw-options=ies=generic",
+                                    "--fullscreen",
+                                    &episode_link,
+                                ])
                                 .stdout(Stdio::null())
                                 .stderr(Stdio::null())
                                 .spawn()
