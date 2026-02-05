@@ -6,6 +6,7 @@ mod app;
 mod frontend;
 mod input;
 mod list;
+mod logging;
 mod server;
 
 mod animeflv;

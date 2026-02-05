@@ -11,6 +11,6 @@ pub enum Frontend {
 
 impl Default for Frontend {
     fn default() -> Self {
-        CONFIG.lock().unwrap().get_frontend()
+        CONFIG.read().unwrap().get_frontend()
     }
 }

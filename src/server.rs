@@ -40,7 +40,7 @@ impl Servers {
         };
 
         CONFIG
-            .lock()
+            .write()
             .unwrap()
             .set_client(self.current_server.clone());
         Servers::generate_current_client(&self.current_server)
@@ -52,7 +52,7 @@ impl Servers {
         };
 
         CONFIG
-            .lock()
+            .write()
             .unwrap()
             .set_client(self.current_server.clone());
         Servers::generate_current_client(&self.current_server)

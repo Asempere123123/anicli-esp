@@ -11,7 +11,8 @@ use ratatui::widgets::ListState;
 use ratatui::widgets::Paragraph;
 use ratatui::DefaultTerminal;
 use serde::{Deserialize, Serialize};
-use std::sync::Mutex;
+use std::path::PathBuf;
+use std::sync::RwLock;
 
 use crate::{
     client::Client,
@@ -20,13 +21,14 @@ use crate::{
 };
 
 lazy_static! {
-    pub static ref CONFIG: Mutex<Config> = Config::empty();
+    pub static ref CONFIG: RwLock<Config> = Config::empty();
 }
 
 #[derive(Default, Serialize, Deserialize, Clone)]
 pub struct Config {
     client: Server,
     frontend: Frontend,
+    log_file_path: PathBuf,
 }
 
 impl Config {
@@ -42,10 +44,11 @@ impl Config {
         None
     }
 
-    fn empty() -> Mutex<Self> {
-        Mutex::new(Self {
+    fn empty() -> RwLock<Self> {
+        RwLock::new(Self {
             client: Server::AnimeFlv,
             frontend: Frontend::DefaultBrowser,
+            log_file_path: PathBuf::new(),
         })
     }
 
@@ -57,6 +60,10 @@ impl Config {
         self.client = client;
 
         self.save();
+    }
+
+    pub fn get_log_file(&self) -> &PathBuf {
+        &self.log_file_path
     }
 
     fn save(&mut self) {
@@ -117,7 +124,7 @@ impl ConfigApp {
         }
 
         CONFIG
-            .lock()
+            .write()
             .unwrap()
             .set(self.config.ok_or(std::io::Error::new(
                 std::io::ErrorKind::NotFound,
@@ -127,9 +134,12 @@ impl ConfigApp {
     }
 
     fn run_internal(&mut self, terminal: &mut DefaultTerminal) -> Result<()> {
+        let dirs = directories::ProjectDirs::from("", "", "ani-cli-es")
+            .expect("Could not get the config dir");
         self.config = Some(Config {
             client: Server::AnimeFlv,
             frontend: self.run_select_frontend(terminal)?,
+            log_file_path: dirs.data_dir().join("logs"),
         });
 
         Ok(())

@@ -98,7 +98,7 @@ impl Client for AnimeFlv {
         let text = response.text()?;
 
         let pattern;
-        if CONFIG.lock().unwrap().get_frontend() == Frontend::Mpv {
+        if CONFIG.read().unwrap().get_frontend() == Frontend::Mpv {
             pattern = r#""server":"yu""#;
         } else {
             pattern = r#""server":"sw""#;

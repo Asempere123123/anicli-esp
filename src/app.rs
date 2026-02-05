@@ -1,6 +1,6 @@
 use std::process::{Command, Stdio};
 
-use anyhow::{Ok, Result};
+use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::prelude::*;
 
@@ -11,6 +11,7 @@ use crate::client::Client;
 use crate::config::CONFIG;
 use crate::input::Input;
 use crate::list::OptionsList;
+use crate::logging::spawn_logger;
 use crate::server::Servers;
 
 #[derive(Default)]
@@ -146,7 +147,7 @@ impl App<'_> {
                         }
                     };
 
-                    match CONFIG.lock().unwrap().get_frontend() {
+                    match CONFIG.read().unwrap().get_frontend() {
                         crate::frontend::Frontend::Brave => {
                             match open::with(episode_link, "brave") {
                                 Err(e) => {
@@ -172,15 +173,22 @@ impl App<'_> {
                                     "--fullscreen",
                                     &episode_link,
                                 ])
-                                .stdout(Stdio::null())
-                                .stderr(Stdio::null())
+                                .stdout(Stdio::piped())
+                                .stderr(Stdio::piped())
                                 .spawn()
                             {
+                                Ok(mut cmd) => {
+                                    if let Some(stdout) = cmd.stdout.take() {
+                                        spawn_logger("mpv-backend", stdout, "stdout");
+                                    };
+                                    if let Some(stderr) = cmd.stderr.take() {
+                                        spawn_logger("mpv-backend", stderr, "stderr");
+                                    };
+                                }
                                 Err(e) => {
                                     self.errors.push(e.to_string());
                                     return;
                                 }
-                                _ => (),
                             };
                         }
                     }

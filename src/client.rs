@@ -10,6 +10,6 @@ pub trait Client {
 
 impl Default for Box<dyn Client> {
     fn default() -> Self {
-        CONFIG.lock().unwrap().get_client()
+        CONFIG.read().unwrap().get_client()
     }
 }
