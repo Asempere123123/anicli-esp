@@ -1,4 +1,7 @@
 # Ver Anime desde el terminal
+[![AUR Version](https://img.shields.io/aur/version/anicli-esp?color=blue&logo=arch-linux)](https://aur.archlinux.org/packages/anicli-esp)
+[![Crates.io Version](https://img.shields.io/crates/v/anicli-esp?logo=rust)](https://crates.io/crates/anicli-esp)
+
 Permite ver anime desde el terminal con una interfaz simple e intuitiva. Funciona en todos los sistemas operativos sin dependencias (en WSL se necesita WSLU `sudo apt install wslu`).
 
 !["Ejemplo de uso](./example.gif)
@@ -7,6 +10,11 @@ anicli-esp
 ```
 
 # Instalación
+# AUR
+Se puede instalar desde el AUR
+```bash
+yay -Sy anicli-esp
+```
 ## Cargo
 Se puede instalar desde cargo
 ```bash
