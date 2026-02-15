@@ -1,6 +1,11 @@
-use anyhow::{Ok, Result};
+use anyhow::{anyhow, Result};
+use headless_chrome::{protocol::cdp::Network, Browser};
 use reqwest::blocking;
 use scraper::{Html, Selector};
+use std::{
+    sync::{mpsc, Arc},
+    time::Duration,
+};
 
 use crate::{client::Client, config::CONFIG, frontend::Frontend};
 
@@ -89,6 +94,16 @@ impl Client for AnimeFlv {
     }
 
     fn get_episode_link(&mut self, episode: i32) -> Result<String> {
+        if let Ok(link) = self.default_get_episode_link(episode) {
+            return Ok(link);
+        }
+
+        self.get_episode_link_fallback(episode)
+    }
+}
+
+impl AnimeFlv {
+    fn default_get_episode_link(&mut self, episode: i32) -> Result<String> {
         let url = format!(
             "https://www3.animeflv.net{}-{}",
             self.name.replace("anime", "ver"),
@@ -125,5 +140,67 @@ impl Client for AnimeFlv {
             + start_text_idx;
 
         Ok(text[start_text_idx..end_idx].to_owned().replace("\\", ""))
+    }
+
+    fn get_episode_link_fallback(&mut self, episode: i32) -> Result<String> {
+        let url = format!(
+            "https://www3.animeflv.net{}-{}",
+            self.name.replace("anime", "ver"),
+            episode
+        );
+        let response = blocking::get(url)?;
+        let text = response.text()?;
+
+        let pattern = r#""server":"stape""#;
+        let start_idx = text.find(pattern).ok_or(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "STAPE service not found",
+        ))? + pattern.len();
+
+        let pattern = r#""code":""#;
+        let start_text_idx = text[start_idx..].find(pattern).ok_or(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "Episode link not found",
+        ))? + pattern.len()
+            + start_idx;
+
+        let pattern = "\"";
+        let end_idx = text[start_text_idx..]
+            .find(pattern)
+            .ok_or(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "Episode link end not found",
+            ))?
+            + start_text_idx;
+
+        let initial_link = text[start_text_idx..end_idx].to_owned().replace("\\", "");
+
+        let browser = Browser::default()?;
+        let tab = browser.new_tab()?;
+        let target_url = "radosgw";
+        tab.call_method(Network::Enable {
+            max_total_buffer_size: None,
+            max_resource_buffer_size: None,
+            max_post_data_size: None,
+            report_direct_socket_traffic: None,
+            enable_durable_messages: None,
+        })?;
+
+        let (tx, rx) = mpsc::channel();
+        tab.add_event_listener(Arc::new(
+            move |event: &headless_chrome::protocol::cdp::types::Event| match event {
+                headless_chrome::protocol::cdp::types::Event::NetworkResponseReceived(params) => {
+                    if params.params.response.url.contains(target_url) {
+                        // When full url is found return it to main thread
+                        let _ = tx.send(params.params.response.url.clone());
+                    }
+                }
+                _ => {}
+            },
+        ))?;
+        tab.navigate_to(&initial_link)?;
+
+        rx.recv_timeout(Duration::from_secs(10))
+            .map_err(|_e| anyhow!("Timed out trying to scrape the episode url from stape"))
     }
 }

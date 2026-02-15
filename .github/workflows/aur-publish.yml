@@ -19,6 +19,6 @@ jobs:
           ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           update_pkgbuild: true
-          try_build_and_install: true
+          try_build_and_install: false
           git_username: Asempere
           git_email: asempere158@gmail.com
