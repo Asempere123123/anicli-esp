@@ -14,7 +14,7 @@ use crate::list::OptionsList;
 use crate::logging::spawn_logger;
 use crate::server::Servers;
 
-#[derive(Default)]
+#[derive(Default, PartialEq, Eq)]
 enum Focus {
     #[default]
     Input,
@@ -22,7 +22,7 @@ enum Focus {
     Servers,
 }
 
-#[derive(Default)]
+#[derive(Default, PartialEq, Eq)]
 enum Stage {
     #[default]
     SeriesSelect,
@@ -80,11 +80,14 @@ impl App<'_> {
             {
                 self.exit = true
             }
-            // Ver likeados con CRT+L
             KeyCode::Char('l') if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.handle_continue_watching()
+                self.handle_switch_liked_menu()
             }
-            KeyCode::Char('l') => self.handle_like(),
+            KeyCode::Char('l')
+                if self.stage == Stage::SeriesSelect && self.focus == Focus::List =>
+            {
+                self.handle_series_like()
+            }
             KeyCode::BackTab => self.change_focus_backwards(),
             KeyCode::Tab => self.change_focus_forward(),
             KeyCode::Enter => self.handle_enter(),
@@ -108,18 +111,23 @@ impl App<'_> {
         }
     }
 
-    fn handle_continue_watching(&mut self) {
-        if let Ok(config) = CONFIG.try_read() {
-            let continue_watching_anime_list = config.get_liked_animes();
-            self.list.set_contents(continue_watching_anime_list);
-            self.stage = Stage::SeriesSelect;
-            self.input.clear();
-        }
+    fn handle_switch_liked_menu(&mut self) {
+        let config = CONFIG.read().unwrap();
+        let liked_animes = config.get_liked_animes();
+        self.list
+            .set_contents(liked_animes.iter().cloned().collect());
+        self.stage = Stage::SeriesSelect;
+        self.input.clear();
+        self.change_focus_forward();
     }
 
-    fn handle_like(&mut self) {
+    fn handle_series_like(&mut self) {
         if let Some(current_selected) = self.list.current_value() {
             CONFIG.write().unwrap().toggle_like(current_selected);
+            // Truco para que se actualize, no hay problemas de rendimiento para necesitar nada mas sofisticado
+            let selected_idx = self.list.current();
+            self.list.set_contents(self.list.get_contents());
+            self.list.select(selected_idx);
         }
     }
 
