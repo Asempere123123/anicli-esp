@@ -80,6 +80,11 @@ impl App<'_> {
             {
                 self.exit = true
             }
+            // Ver likeados con CRT+L
+            KeyCode::Char('l') if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.handle_continue_watching()
+            }
+            KeyCode::Char('l') => self.handle_like(),
             KeyCode::BackTab => self.change_focus_backwards(),
             KeyCode::Tab => self.change_focus_forward(),
             KeyCode::Enter => self.handle_enter(),
@@ -100,6 +105,21 @@ impl App<'_> {
             Focus::Input => self.handle_enter_input(),
             Focus::List => self.handle_enter_list(),
             _ => (),
+        }
+    }
+
+    fn handle_continue_watching(&mut self) {
+        if let Ok(config) = CONFIG.try_read() {
+            let continue_watching_anime_list = config.get_liked_animes();
+            self.list.set_contents(continue_watching_anime_list);
+            self.stage = Stage::SeriesSelect;
+            self.input.clear();
+        }
+    }
+
+    fn handle_like(&mut self) {
+        if let Some(current_selected) = self.list.current_value() {
+            CONFIG.write().unwrap().toggle_like(current_selected);
         }
     }
 

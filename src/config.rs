@@ -29,6 +29,7 @@ pub struct Config {
     client: Server,
     frontend: Frontend,
     log_file_path: PathBuf,
+    liked_animes: Vec<String>,
 }
 
 impl Config {
@@ -49,6 +50,7 @@ impl Config {
             client: Server::AnimeFlv,
             frontend: Frontend::DefaultBrowser,
             log_file_path: PathBuf::new(),
+            liked_animes: Vec::new(),
         })
     }
 
@@ -64,6 +66,24 @@ impl Config {
 
     pub fn get_log_file(&self) -> &PathBuf {
         &self.log_file_path
+    }
+    pub fn get_liked_animes(&self) -> Vec<String> {
+        return self.liked_animes.clone();
+    }
+
+    pub fn toggle_like(&mut self, current_selected: String) {
+        if let Some(anime_index) = self
+            .liked_animes
+            .iter()
+            .enumerate()
+            .find(|(_, a)| **a == current_selected)
+            .map(|(i, _)| i)
+        {
+            self.liked_animes.remove(anime_index);
+        } else {
+            self.liked_animes.push(current_selected);
+        }
+        self.save();
     }
 
     fn save(&mut self) {
@@ -140,6 +160,7 @@ impl ConfigApp {
             client: Server::AnimeFlv,
             frontend: self.run_select_frontend(terminal)?,
             log_file_path: dirs.data_dir().join("logs"),
+            liked_animes: Vec::new(),
         });
 
         Ok(())
