@@ -118,7 +118,7 @@ impl App<'_> {
             .set_contents(liked_animes.iter().cloned().collect());
         self.stage = Stage::SeriesSelect;
         self.input.clear();
-        self.change_focus_forward();
+        self.set_focus(Focus::List);
     }
 
     fn handle_series_like(&mut self) {
@@ -223,6 +223,33 @@ impl App<'_> {
                 }
             }
         }
+    }
+
+    fn set_focus(&mut self, focus: Focus) {
+        match self.focus {
+            Focus::Input => {
+                self.input.defocus();
+            }
+            Focus::List => {
+                self.list.defocus();
+            }
+            Focus::Servers => {
+                self.servers.defocus();
+            }
+        }
+
+        match focus {
+            Focus::Input => {
+                self.input.focus();
+            }
+            Focus::List => {
+                self.list.focus();
+            }
+            Focus::Servers => {
+                self.servers.focus();
+            }
+        }
+        self.focus = focus;
     }
 
     fn change_focus_forward(&mut self) {
