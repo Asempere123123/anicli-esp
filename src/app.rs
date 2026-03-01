@@ -83,7 +83,7 @@ impl App {
             KeyCode::Char('l') if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.handle_switch_liked_menu()
             }
-            KeyCode::Char('l')
+            KeyCode::Right | KeyCode::Left
                 if self.stage == Stage::SeriesSelect && self.focus == Focus::List =>
             {
                 self.handle_series_like()
