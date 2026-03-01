@@ -30,7 +30,7 @@ enum Stage {
 }
 
 #[derive(Default)]
-pub struct App<'a> {
+pub struct App {
     exit: bool,
     focus: Focus,
     client: Box<dyn Client>,
@@ -39,11 +39,11 @@ pub struct App<'a> {
     errors: Vec<String>,
 
     input: Input,
-    list: OptionsList<'a>,
+    list: OptionsList,
     servers: Servers,
 }
 
-impl App<'_> {
+impl App {
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> Result<()> {
         while !self.exit {
             terminal.draw(|frame| self.draw(frame))?;
@@ -124,10 +124,6 @@ impl App<'_> {
     fn handle_series_like(&mut self) {
         if let Some(current_selected) = self.list.current_value() {
             CONFIG.write().unwrap().toggle_like(current_selected);
-            // Truco para que se actualize, no hay problemas de rendimiento para necesitar nada mas sofisticado
-            let selected_idx = self.list.current();
-            self.list.set_contents(self.list.get_contents());
-            self.list.select(selected_idx);
         }
     }
 
@@ -293,7 +289,7 @@ impl App<'_> {
     }
 }
 
-impl Widget for &mut App<'_> {
+impl Widget for &mut App {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let layout = Layout::vertical([
             Constraint::Length(3),
