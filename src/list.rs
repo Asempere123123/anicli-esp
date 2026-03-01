@@ -1,21 +1,28 @@
+use std::{
+    borrow::Cow,
+    time::{Duration, Instant},
+};
+
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
-    prelude::*,
-    widgets::{Block, Borders, List, ListItem, ListState},
+    style::{Color, Modifier, Style},
+    text::{Line, Span},
+    widgets::{Block, Borders, List, ListItem, ListState, StatefulWidget, Widget},
 };
 
 use crate::config::CONFIG;
 
-#[derive(Default)]
-pub struct OptionsList<'list_contents> {
-    contents: Vec<ListItem<'list_contents>>,
-    contents_texts: Vec<&'list_contents str>,
-    list_state: ListState,
+const SEARCH_BUFFER_RESET_DURATION: Duration = Duration::from_millis(700);
 
+pub struct OptionsList {
+    contents: Vec<String>,
+    list_state: ListState,
     focus: bool,
+    search_buffer: String,
+    last_time_buffer_written: Instant,
 }
 
-impl<'list_contents> OptionsList<'list_contents> {
+impl OptionsList {
     pub fn focus(&mut self) {
         self.focus = true;
     }
@@ -25,41 +32,21 @@ impl<'list_contents> OptionsList<'list_contents> {
     }
 
     pub fn set_contents(&mut self, contents: Vec<String>) {
-        let contents = contents
-            .into_iter()
-            .map(|mut tittle| {
-                if CONFIG.read().unwrap().get_liked_animes().contains(&tittle) {
-                    tittle.push_str(" ★");
-                }
-
-                // Luego borro los viejos
-                &*Box::leak(tittle.into_boxed_str())
-            })
-            .collect();
-
-        // Borro los viejos
-        for tittle in self.contents_texts.iter() {
-            unsafe {
-                let boxed_str: Box<str> = Box::from_raw(*tittle as *const str as *mut str);
-                drop(boxed_str);
-            }
-        }
-
-        self.contents_texts = contents;
-        self.contents = self
-            .contents_texts
-            .iter()
-            .map(|tittle| ListItem::new(*tittle))
-            .collect();
-        if !self.contents.is_empty() {
-            self.list_state.select(Some(0));
-        }
+        self.contents = contents;
+        self.list_state.select_first();
     }
 
     pub fn handle_key_event(&mut self, key_event: KeyEvent) {
         match key_event.code {
-            KeyCode::Up => self.up(),
-            KeyCode::Down => self.down(),
+            KeyCode::Up => {
+                self.clear_search_buffer();
+                self.up();
+            }
+            KeyCode::Down => {
+                self.clear_search_buffer();
+                self.down();
+            }
+            KeyCode::Char(char) => self.search_buffer_register_char(char),
             _ => (),
         }
     }
@@ -76,32 +63,67 @@ impl<'list_contents> OptionsList<'list_contents> {
         self.list_state.selected()
     }
 
-    pub fn select(&mut self, idx: Option<usize>) {
-        self.list_state.select(idx);
-    }
-
-    pub fn current_value(&self) -> Option<String> {
+    pub fn current_value(&self) -> Option<&str> {
         if let Some(idx) = self.list_state.selected() {
-            let contents = self.contents_texts[idx]
-                .strip_suffix(" ★")
-                .unwrap_or(&self.contents_texts[idx]);
-            // La referencia puede ser dropeada antes
-            return Some(contents.to_owned());
+            return Some(&self.contents[idx]);
         }
         None
     }
 
-    pub fn get_contents(&self) -> Vec<String> {
-        self.contents_texts
+    fn clear_search_buffer(&mut self) {
+        self.search_buffer.clear();
+    }
+
+    fn search_buffer_register_char(&mut self, char: char) {
+        if self.last_time_buffer_written.elapsed() >= SEARCH_BUFFER_RESET_DURATION {
+            self.clear_search_buffer();
+        }
+
+        self.search_buffer.push(char);
+        self.last_time_buffer_written = Instant::now();
+
+        // Find matches
+        if let Some(found_match) = self
+            .contents
             .iter()
-            .map(|entry| entry.strip_suffix(" ★").unwrap_or(entry).to_owned())
-            .collect()
+            .position(|line| contains_ignore_ascii_case(line, &self.search_buffer))
+        {
+            self.list_state.select(Some(found_match));
+        }
     }
 }
 
-impl Widget for &mut OptionsList<'_> {
-    fn render(self, area: Rect, buf: &mut Buffer) {
-        let list = List::new(self.contents.clone())
+impl Widget for &mut OptionsList {
+    fn render(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer) {
+        let config = CONFIG.read().unwrap();
+
+        let list_items = self.contents.iter().map(|line| {
+            let mut line = Cow::Borrowed(line.as_str());
+            if config.get_liked_animes().contains(line.as_ref()) {
+                line.to_mut().push_str(" ★");
+            }
+
+            let Some(match_start) =
+                find_ignore_ascii_case(line.as_ref(), self.search_buffer.as_str())
+            else {
+                return ListItem::new(line);
+            };
+            let match_end = match_start + self.search_buffer.len();
+
+            ListItem::new(Line::from_iter([
+                Span::raw(line[..match_start].to_owned()),
+                Span::styled(
+                    line[match_start..match_end].to_owned(),
+                    Style::new()
+                        .fg(Color::Black)
+                        .bg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw(line[match_end..].to_owned()),
+            ]))
+        });
+
+        let list = List::new(list_items)
             .highlight_symbol("> ")
             .highlight_style(Style::new().fg(Color::Yellow).add_modifier(Modifier::BOLD))
             .block(
@@ -115,4 +137,38 @@ impl Widget for &mut OptionsList<'_> {
 
         StatefulWidget::render(list, area, buf, &mut self.list_state);
     }
+}
+
+impl Default for OptionsList {
+    fn default() -> Self {
+        Self {
+            contents: Default::default(),
+            list_state: Default::default(),
+            focus: Default::default(),
+            search_buffer: Default::default(),
+            last_time_buffer_written: Instant::now(),
+        }
+    }
+}
+
+fn contains_ignore_ascii_case(haystack: &str, needle: &str) -> bool {
+    if needle.is_empty() {
+        return true;
+    }
+
+    haystack
+        .as_bytes()
+        .windows(needle.len())
+        .any(|window| window.eq_ignore_ascii_case(needle.as_bytes()))
+}
+
+fn find_ignore_ascii_case(haystack: &str, needle: &str) -> Option<usize> {
+    if needle.is_empty() {
+        return Some(0);
+    }
+
+    haystack
+        .as_bytes()
+        .windows(needle.len())
+        .position(|window| window.eq_ignore_ascii_case(needle.as_bytes()))
 }

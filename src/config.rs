@@ -72,9 +72,9 @@ impl Config {
         &self.liked_animes
     }
 
-    pub fn toggle_like(&mut self, series: String) {
-        if !self.liked_animes.remove(&series) {
-            self.liked_animes.insert(series);
+    pub fn toggle_like(&mut self, series: &str) {
+        if !self.liked_animes.remove(series) {
+            self.liked_animes.insert(series.to_owned());
         }
 
         self.save();
