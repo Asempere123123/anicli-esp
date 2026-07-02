@@ -9,6 +9,7 @@ mod list;
 mod logging;
 mod server;
 
+mod animeav1;
 mod animeflv;
 mod client;
 

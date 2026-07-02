@@ -2,12 +2,18 @@ use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::{animeflv, client::Client, config::CONFIG};
+use crate::{animeav1, animeflv, client::Client, config::CONFIG};
 
-#[derive(Default, Serialize, Deserialize, Clone, Copy)]
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug)]
 pub enum Server {
-    #[default]
     AnimeFlv,
+    AnimeAv1,
+}
+
+impl Default for Server {
+    fn default() -> Self {
+        CONFIG.read().unwrap().get_server()
+    }
 }
 
 #[derive(Default)]
@@ -36,7 +42,8 @@ impl Servers {
 
     fn right(&mut self) -> Box<dyn Client> {
         self.current_server = match self.current_server {
-            Server::AnimeFlv => Server::AnimeFlv,
+            Server::AnimeFlv => Server::AnimeAv1,
+            Server::AnimeAv1 => Server::AnimeFlv,
         };
 
         CONFIG
@@ -48,7 +55,8 @@ impl Servers {
 
     fn left(&mut self) -> Box<dyn Client> {
         self.current_server = match self.current_server {
-            Server::AnimeFlv => Server::AnimeFlv,
+            Server::AnimeFlv => Server::AnimeAv1,
+            Server::AnimeAv1 => Server::AnimeFlv,
         };
 
         CONFIG
@@ -59,22 +67,39 @@ impl Servers {
     }
 
     pub fn generate_current_client(server: &Server) -> Box<dyn Client> {
-        Box::new(match server {
-            Server::AnimeFlv => animeflv::AnimeFlv::default(),
-        })
+        match server {
+            Server::AnimeFlv => Box::new(animeflv::AnimeFlv::default()),
+            Server::AnimeAv1 => Box::new(animeav1::AnimeAv1::default()),
+        }
     }
 }
 
 impl Widget for &Servers {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        match self.current_server {
-            Server::AnimeFlv => Line::from(vec!["AnimeFlv".underlined()])
-                .fg(match self.focus {
-                    true => Color::Yellow,
-                    false => Color::White,
-                })
-                .right_aligned()
-                .render(area, buf),
-        }
+        let fg_color = if self.focus {
+            Color::Yellow
+        } else {
+            Color::White
+        };
+
+        let spans = vec![
+            Span::raw("AnimeFlv").fg(fg_color).add_modifier(
+                if self.current_server == Server::AnimeFlv {
+                    Modifier::UNDERLINED
+                } else {
+                    Modifier::empty()
+                },
+            ),
+            Span::raw("  "),
+            Span::raw("AnimeAv1").fg(fg_color).add_modifier(
+                if self.current_server == Server::AnimeAv1 {
+                    Modifier::UNDERLINED
+                } else {
+                    Modifier::empty()
+                },
+            ),
+        ];
+
+        Line::from(spans).right_aligned().render(area, buf);
     }
 }

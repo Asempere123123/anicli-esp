@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::config::CONFIG;
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub enum Frontend {
     DefaultBrowser,
     Brave,

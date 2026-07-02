@@ -25,7 +25,7 @@ lazy_static! {
     pub static ref CONFIG: RwLock<Config> = Config::empty();
 }
 
-#[derive(Default, Serialize, Deserialize, Clone)]
+#[derive(Default, Serialize, Deserialize, Clone, Debug)]
 pub struct Config {
     client: Server,
     frontend: Frontend,
@@ -48,7 +48,7 @@ impl Config {
 
     fn empty() -> RwLock<Self> {
         RwLock::new(Self {
-            client: Server::AnimeFlv,
+            client: Server::AnimeAv1,
             frontend: Frontend::DefaultBrowser,
             log_file_path: PathBuf::new(),
             liked_animes: BTreeSet::new(),
@@ -57,6 +57,10 @@ impl Config {
 
     pub fn get_client(&self) -> Box<dyn Client> {
         Servers::generate_current_client(&self.client)
+    }
+
+    pub fn get_server(&self) -> Server {
+        self.client
     }
 
     pub fn set_client(&mut self, client: Server) {
@@ -151,7 +155,7 @@ impl ConfigApp {
         let dirs = directories::ProjectDirs::from("", "", "ani-cli-es")
             .expect("Could not get the config dir");
         self.config = Some(Config {
-            client: Server::AnimeFlv,
+            client: Server::AnimeAv1,
             frontend: self.run_select_frontend(terminal)?,
             log_file_path: dirs.data_dir().join("logs"),
             liked_animes: BTreeSet::new(),

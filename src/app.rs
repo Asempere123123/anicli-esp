@@ -12,7 +12,7 @@ use crate::config::CONFIG;
 use crate::input::Input;
 use crate::list::OptionsList;
 use crate::logging::spawn_logger;
-use crate::server::Servers;
+use crate::server::{Server, Servers};
 
 #[derive(Default, PartialEq, Eq)]
 enum Focus {
@@ -191,12 +191,24 @@ impl App {
                             };
                         }
                         crate::frontend::Frontend::Mpv => {
-                            match Command::new("mpv")
-                                .args([
+                            let mut command = Command::new("mpv");
+
+                            if CONFIG.read().unwrap().get_server() == Server::AnimeFlv {
+                                command.args([
                                     "--ytdl-raw-options=ies=generic",
                                     "--fullscreen",
                                     &episode_link,
-                                ])
+                                ]);
+                            }
+                            if CONFIG.read().unwrap().get_server() == Server::AnimeAv1 {
+                                command.args([
+                                    "--http-header-fields=Referer: https://www.mp4upload.com/",
+                                    "--fullscreen",
+                                    &episode_link,
+                                ]);
+                            }
+
+                            match command
                                 .stdout(Stdio::piped())
                                 .stderr(Stdio::piped())
                                 .spawn()
