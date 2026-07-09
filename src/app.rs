@@ -200,7 +200,9 @@ impl App {
                                     &episode_link,
                                 ]);
                             }
-                            if CONFIG.read().unwrap().get_server() == Server::AnimeAv1 {
+                            if CONFIG.read().unwrap().get_server() == Server::AnimeAv1
+                                || CONFIG.read().unwrap().get_server() == Server::AnimeAv1SUB
+                            {
                                 command.args([
                                     "--http-header-fields=Referer: https://www.mp4upload.com/",
                                     "--fullscreen",

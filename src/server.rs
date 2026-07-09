@@ -2,12 +2,13 @@ use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::{animeav1, animeflv, client::Client, config::CONFIG};
+use crate::{animeav1, animeav1sub, animeflv, client::Client, config::CONFIG};
 
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug)]
 pub enum Server {
     AnimeFlv,
     AnimeAv1,
+    AnimeAv1SUB,
 }
 
 impl Default for Server {
@@ -42,7 +43,8 @@ impl Servers {
 
     fn right(&mut self) -> Box<dyn Client> {
         self.current_server = match self.current_server {
-            Server::AnimeFlv => Server::AnimeAv1,
+            Server::AnimeFlv => Server::AnimeAv1SUB,
+            Server::AnimeAv1SUB => Server::AnimeAv1,
             Server::AnimeAv1 => Server::AnimeFlv,
         };
 
@@ -55,8 +57,9 @@ impl Servers {
 
     fn left(&mut self) -> Box<dyn Client> {
         self.current_server = match self.current_server {
+            Server::AnimeAv1SUB => Server::AnimeFlv,
+            Server::AnimeAv1 => Server::AnimeAv1SUB,
             Server::AnimeFlv => Server::AnimeAv1,
-            Server::AnimeAv1 => Server::AnimeFlv,
         };
 
         CONFIG
@@ -70,6 +73,7 @@ impl Servers {
         match server {
             Server::AnimeFlv => Box::new(animeflv::AnimeFlv::default()),
             Server::AnimeAv1 => Box::new(animeav1::AnimeAv1::default()),
+            Server::AnimeAv1SUB => Box::new(animeav1sub::AnimeAv1SUB::default()),
         }
     }
 }
@@ -85,6 +89,14 @@ impl Widget for &Servers {
         let spans = vec![
             Span::raw("AnimeFlv").fg(fg_color).add_modifier(
                 if self.current_server == Server::AnimeFlv {
+                    Modifier::UNDERLINED
+                } else {
+                    Modifier::empty()
+                },
+            ),
+            Span::raw("  "),
+            Span::raw("AnimeAv1 (SUB)").fg(fg_color).add_modifier(
+                if self.current_server == Server::AnimeAv1SUB {
                     Modifier::UNDERLINED
                 } else {
                     Modifier::empty()

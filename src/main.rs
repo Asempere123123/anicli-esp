@@ -10,6 +10,7 @@ mod logging;
 mod server;
 
 mod animeav1;
+mod animeav1sub;
 mod animeflv;
 mod client;
 
