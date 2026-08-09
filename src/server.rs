@@ -2,13 +2,13 @@ use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::{animeav1, animeav1sub, animeflv, client::Client, config::CONFIG};
+use crate::{animeav1, animeav1dub, animeflv, client::Client, config::CONFIG};
 
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug)]
 pub enum Server {
     AnimeFlv,
     AnimeAv1,
-    AnimeAv1SUB,
+    AnimeAv1DUB,
 }
 
 impl Default for Server {
@@ -43,8 +43,8 @@ impl Servers {
 
     fn right(&mut self) -> Box<dyn Client> {
         self.current_server = match self.current_server {
-            Server::AnimeFlv => Server::AnimeAv1SUB,
-            Server::AnimeAv1SUB => Server::AnimeAv1,
+            Server::AnimeFlv => Server::AnimeAv1DUB,
+            Server::AnimeAv1DUB => Server::AnimeAv1,
             Server::AnimeAv1 => Server::AnimeFlv,
         };
 
@@ -57,8 +57,8 @@ impl Servers {
 
     fn left(&mut self) -> Box<dyn Client> {
         self.current_server = match self.current_server {
-            Server::AnimeAv1SUB => Server::AnimeFlv,
-            Server::AnimeAv1 => Server::AnimeAv1SUB,
+            Server::AnimeAv1DUB => Server::AnimeFlv,
+            Server::AnimeAv1 => Server::AnimeAv1DUB,
             Server::AnimeFlv => Server::AnimeAv1,
         };
 
@@ -73,7 +73,7 @@ impl Servers {
         match server {
             Server::AnimeFlv => Box::new(animeflv::AnimeFlv::default()),
             Server::AnimeAv1 => Box::new(animeav1::AnimeAv1::default()),
-            Server::AnimeAv1SUB => Box::new(animeav1sub::AnimeAv1SUB::default()),
+            Server::AnimeAv1DUB => Box::new(animeav1dub::AnimeAv1DUB::default()),
         }
     }
 }
@@ -95,8 +95,8 @@ impl Widget for &Servers {
                 },
             ),
             Span::raw("  "),
-            Span::raw("AnimeAv1 (SUB)").fg(fg_color).add_modifier(
-                if self.current_server == Server::AnimeAv1SUB {
+            Span::raw("AnimeAv1 (DUB)").fg(fg_color).add_modifier(
+                if self.current_server == Server::AnimeAv1DUB {
                     Modifier::UNDERLINED
                 } else {
                     Modifier::empty()

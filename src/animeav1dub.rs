@@ -5,12 +5,12 @@ use scraper::{Html, Selector};
 use crate::{client::Client, config::CONFIG, frontend::Frontend};
 
 #[derive(Default)]
-pub struct AnimeAv1SUB {
+pub struct AnimeAv1DUB {
     series_links: Vec<String>,
     name: String,
 }
 
-impl Client for AnimeAv1SUB {
+impl Client for AnimeAv1DUB {
     fn get_animes(&mut self, query: &str) -> Result<Vec<String>> {
         let url = format!("https://animeav1.com/catalogo?search={}", query);
         let response = blocking::get(url)?;
@@ -100,7 +100,7 @@ impl Client for AnimeAv1SUB {
     }
 }
 
-impl AnimeAv1SUB {
+impl AnimeAv1DUB {
     fn default_get_episode_link(&mut self, episode: i32) -> Result<String> {
         let url = format!("https://animeav1.com{}/{}", self.name, episode);
         let response = blocking::get(url)?;

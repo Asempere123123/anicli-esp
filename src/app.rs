@@ -201,7 +201,7 @@ impl App {
                                 ]);
                             }
                             if CONFIG.read().unwrap().get_server() == Server::AnimeAv1
-                                || CONFIG.read().unwrap().get_server() == Server::AnimeAv1SUB
+                                || CONFIG.read().unwrap().get_server() == Server::AnimeAv1DUB
                             {
                                 command.args([
                                     "--http-header-fields=Referer: https://www.mp4upload.com/",
