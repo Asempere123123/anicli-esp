@@ -1,4 +1,4 @@
-use crossterm::event::{KeyCode, KeyEvent};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     prelude::*,
     widgets::{Block, Paragraph},
@@ -84,6 +84,9 @@ impl Input {
 
     pub fn handle_key_event(&mut self, key_event: KeyEvent) {
         match key_event.code {
+            KeyCode::Char('u') if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.clear()
+            }
             KeyCode::Char(char) => self.handle_char(char),
             KeyCode::Backspace => self.handle_backspace(),
             KeyCode::Left => self.handle_left(),
