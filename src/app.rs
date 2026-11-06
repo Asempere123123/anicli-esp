@@ -28,6 +28,7 @@ enum Stage {
     SeriesSelect,
     EpisodeSelect,
     History,
+    Liked,
 }
 
 #[derive(Default)]
@@ -92,7 +93,8 @@ impl App {
                 self.handle_switch_history_menu()
             }
             KeyCode::Right | KeyCode::Left
-                if self.stage == Stage::SeriesSelect && self.focus == Focus::List =>
+                if matches!(self.stage, Stage::SeriesSelect | Stage::Liked)
+                    && self.focus == Focus::List =>
             {
                 self.handle_series_like()
             }
@@ -131,7 +133,7 @@ impl App {
         }
         self.list
             .set_contents(liked_animes.iter().cloned().collect());
-        self.stage = Stage::SeriesSelect;
+        self.stage = Stage::Liked;
         self.input.clear();
         self.set_focus(Focus::List);
     }
@@ -243,24 +245,50 @@ impl App {
         self.stage = Stage::SeriesSelect;
     }
 
+    /// Abre la serie `idx` de la última búsqueda del cliente; `from` es a dónde vuelve Esc
+    fn enter_series(&mut self, idx: usize, from: Stage) {
+        let episodes = match self.client.select_anime(idx) {
+            Result::Ok(episodes) => episodes,
+            Err(e) => {
+                self.errors.push(e.to_string());
+                return;
+            }
+        };
+        self.series_name = self.list.current_value().unwrap_or_default().to_owned();
+        self.back = Some((self.list.clone(), from));
+        self.list
+            .set_contents(episodes.iter().map(|episode| episode.to_string()).collect());
+        self.stage = Stage::EpisodeSelect;
+    }
+
+    // Los likes solo guardan el nombre: se busca en el servidor actual y se abre el que coincide
+    fn handle_enter_liked(&mut self) {
+        let Some(name) = self.list.current_value().map(str::to_owned) else {
+            return;
+        };
+        let found = match self.client.get_animes(&name) {
+            Result::Ok(animes) => animes.iter().position(|anime| *anime == name),
+            Err(e) => {
+                self.errors.push(e.to_string());
+                return;
+            }
+        };
+        match found {
+            Some(idx) => self.enter_series(idx, Stage::Liked),
+            None => self.errors.push(format!(
+                "\"{name}\" no aparece en este servidor. Prueba con otro (Tab hasta los servidores)."
+            )),
+        }
+    }
+
     fn handle_enter_list(&mut self) {
         match self.stage {
             Stage::SeriesSelect => {
                 if let Some(selected) = self.list.current() {
-                    let episodes = match self.client.select_anime(selected) {
-                        Result::Ok(episodes) => episodes,
-                        Err(e) => {
-                            self.errors.push(e.to_string());
-                            return;
-                        }
-                    };
-                    self.series_name = self.list.current_value().unwrap_or_default().to_owned();
-                    self.back = Some((self.list.clone(), Stage::SeriesSelect));
-                    self.list
-                        .set_contents(episodes.iter().map(|episode| episode.to_string()).collect());
-                    self.stage = Stage::EpisodeSelect;
+                    self.enter_series(selected, Stage::SeriesSelect);
                 }
             }
+            Stage::Liked => self.handle_enter_liked(),
             Stage::History => self.handle_enter_history(),
             Stage::EpisodeSelect => {
                 if let Some(selected) = self.list.current_value() {
