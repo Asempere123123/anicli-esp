@@ -8,7 +8,7 @@ use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::DefaultTerminal;
 
 use crate::client::Client;
-use crate::config::CONFIG;
+use crate::config::{WatchEntry, CONFIG};
 use crate::input::Input;
 use crate::list::OptionsList;
 use crate::logging::spawn_logger;
@@ -27,6 +27,7 @@ enum Stage {
     #[default]
     SeriesSelect,
     EpisodeSelect,
+    History,
 }
 
 #[derive(Default)]
@@ -35,6 +36,7 @@ pub struct App {
     focus: Focus,
     client: Box<dyn Client>,
     stage: Stage,
+    series_name: String,
 
     errors: Vec<String>,
 
@@ -83,6 +85,9 @@ impl App {
             KeyCode::Char('l') if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.handle_switch_liked_menu()
             }
+            KeyCode::Char('r') if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.handle_switch_history_menu()
+            }
             KeyCode::Right | KeyCode::Left
                 if self.stage == Stage::SeriesSelect && self.focus == Focus::List =>
             {
@@ -121,6 +126,58 @@ impl App {
         self.set_focus(Focus::List);
     }
 
+    fn handle_switch_history_menu(&mut self) {
+        let config = CONFIG.read().unwrap();
+        // Sin esto queda el foco en una lista vacía y la app parece congelada
+        if config.get_history().is_empty() {
+            self.errors
+                .push("Todavía no has visto ningún episodio. Cuando abras uno aparecerá aquí.".to_owned());
+            return;
+        }
+        self.list.set_contents(
+            config
+                .get_history()
+                .iter()
+                .map(|e| format!("{} · ep {} · {:?}", e.name, e.episode, e.server))
+                .collect(),
+        );
+        self.stage = Stage::History;
+        self.input.clear();
+        self.set_focus(Focus::List);
+    }
+
+    fn handle_enter_history(&mut self) {
+        let Some(entry) = self
+            .list
+            .current()
+            .and_then(|idx| CONFIG.read().unwrap().get_history().get(idx).cloned())
+        else {
+            return;
+        };
+
+        self.client = self.servers.set(entry.server);
+        let episodes = match self.client.open_series(&entry.link) {
+            Result::Ok(episodes) => episodes,
+            Err(e) => {
+                self.errors.push(e.to_string());
+                return;
+            }
+        };
+        // El cursor queda en el siguiente episodio, o en el último visto si no hay siguiente
+        let resume = episodes
+            .iter()
+            .position(|&ep| ep == entry.episode + 1)
+            .or_else(|| episodes.iter().position(|&ep| ep == entry.episode));
+
+        self.series_name = entry.name;
+        self.list
+            .set_contents(episodes.iter().map(|episode| episode.to_string()).collect());
+        if let Some(idx) = resume {
+            self.list.select(idx);
+        }
+        self.stage = Stage::EpisodeSelect;
+    }
+
     fn handle_series_like(&mut self) {
         if let Some(current_selected) = self.list.current_value() {
             CONFIG.write().unwrap().toggle_like(current_selected);
@@ -153,17 +210,17 @@ impl App {
                             return;
                         }
                     };
+                    self.series_name = self.list.current_value().unwrap_or_default().to_owned();
                     self.list
                         .set_contents(episodes.iter().map(|episode| episode.to_string()).collect());
                     self.stage = Stage::EpisodeSelect;
                 }
             }
+            Stage::History => self.handle_enter_history(),
             Stage::EpisodeSelect => {
                 if let Some(selected) = self.list.current_value() {
-                    let episode_link = match self
-                        .client
-                        .get_episode_link(i32::from_str_radix(&selected, 10).unwrap())
-                    {
+                    let episode = i32::from_str_radix(&selected, 10).unwrap();
+                    let episode_link = match self.client.get_episode_link(episode) {
                         Result::Ok(link) => link,
                         Err(e) => {
                             self.errors.push(e.to_string());
@@ -230,6 +287,15 @@ impl App {
                             };
                         }
                     }
+
+                    // Fuera del match y en dos pasos: CONFIG no admite read y write a la vez
+                    let server = CONFIG.read().unwrap().get_server();
+                    CONFIG.write().unwrap().record_watch(WatchEntry {
+                        name: self.series_name.clone(),
+                        server,
+                        link: self.client.series_link().to_owned(),
+                        episode,
+                    });
                 }
             }
         }

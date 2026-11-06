@@ -59,6 +59,10 @@ impl OptionsList {
         self.list_state.select_next();
     }
 
+    pub fn select(&mut self, idx: usize) {
+        self.list_state.select(Some(idx));
+    }
+
     pub fn current(&self) -> Option<usize> {
         self.list_state.selected()
     }

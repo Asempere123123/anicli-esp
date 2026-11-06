@@ -32,3 +32,5 @@ anicli-esp --config
 Con el tabulador y shift + tabulador se puede cambiar la ventana seleccionada. El enter permite selecionar una opción.
 ## Likes
 Con la flecha derecha pudes añadir un anime a la lista de animes que te gustan. A la cual puedes acceder presionando ctrl+l
+## Continuar viendo
+Cada episodio que abres se guarda junto con su serie y servidor. Con ctrl+r se abre la lista de vistos recientemente; al elegir una serie la lista de episodios queda posicionada en el siguiente episodio, así que basta con pulsar enter para seguir.

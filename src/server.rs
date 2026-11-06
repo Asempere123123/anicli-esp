@@ -69,6 +69,13 @@ impl Servers {
         Servers::generate_current_client(&self.current_server)
     }
 
+    pub fn set(&mut self, server: Server) -> Box<dyn Client> {
+        self.current_server = server;
+
+        CONFIG.write().unwrap().set_client(server);
+        Servers::generate_current_client(&server)
+    }
+
     pub fn generate_current_client(server: &Server) -> Box<dyn Client> {
         match server {
             Server::AnimeFlv => Box::new(animeflv::AnimeFlv::default()),

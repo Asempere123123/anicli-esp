@@ -55,7 +55,7 @@ impl Client for AnimeAv1DUB {
     }
 
     fn select_anime(&mut self, idx: usize) -> Result<Vec<i32>> {
-        self.name = self
+        let link = self
             .series_links
             .get(idx)
             .ok_or(std::io::Error::new(
@@ -63,6 +63,15 @@ impl Client for AnimeAv1DUB {
                 "Invalid index",
             ))?
             .to_owned();
+        self.open_series(&link)
+    }
+
+    fn series_link(&self) -> &str {
+        &self.name
+    }
+
+    fn open_series(&mut self, link: &str) -> Result<Vec<i32>> {
+        self.name = link.to_owned();
         let url = format!("https://animeav1.com{}", self.name);
         let response = blocking::get(url)?;
         let html = Html::parse_document(&response.text()?);
