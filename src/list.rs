@@ -14,6 +14,7 @@ use crate::config::CONFIG;
 
 const SEARCH_BUFFER_RESET_DURATION: Duration = Duration::from_millis(700);
 
+#[derive(Clone)]
 pub struct OptionsList {
     contents: Vec<String>,
     list_state: ListState,

@@ -22,7 +22,7 @@ enum Focus {
     Servers,
 }
 
-#[derive(Default, PartialEq, Eq)]
+#[derive(Default, PartialEq, Eq, Clone, Copy)]
 enum Stage {
     #[default]
     SeriesSelect,
@@ -37,6 +37,8 @@ pub struct App {
     client: Box<dyn Client>,
     stage: Stage,
     series_name: String,
+    // Lista desde la que se entró a los episodios, para volver con Esc
+    back: Option<(OptionsList, Stage)>,
 
     errors: Vec<String>,
 
@@ -82,6 +84,7 @@ impl App {
             {
                 self.exit = true
             }
+            KeyCode::Esc if self.stage == Stage::EpisodeSelect => self.handle_back(),
             KeyCode::Char('l') if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.handle_switch_liked_menu()
             }
@@ -177,12 +180,38 @@ impl App {
             .or_else(|| episodes.iter().position(|&ep| ep == entry.episode));
 
         self.series_name = entry.name;
+        self.back = Some((self.list.clone(), Stage::History));
         self.list
             .set_contents(episodes.iter().map(|episode| episode.to_string()).collect());
         if let Some(idx) = resume {
             self.list.select(idx);
         }
         self.stage = Stage::EpisodeSelect;
+    }
+
+    fn handle_back(&mut self) {
+        match self.back.take() {
+            // El historial se reordena al ver un episodio: se regenera y se vuelve a esta serie
+            Some((_, Stage::History)) => {
+                self.handle_switch_history_menu();
+                let link = self.client.series_link();
+                let idx = CONFIG
+                    .read()
+                    .unwrap()
+                    .get_history()
+                    .iter()
+                    .position(|e| e.link == link);
+                if let Some(idx) = idx {
+                    self.list.select(idx);
+                }
+            }
+            Some((list, stage)) => {
+                self.list = list;
+                self.stage = stage;
+                self.set_focus(Focus::List);
+            }
+            None => (),
+        }
     }
 
     fn handle_series_like(&mut self) {
@@ -226,6 +255,7 @@ impl App {
                         }
                     };
                     self.series_name = self.list.current_value().unwrap_or_default().to_owned();
+                    self.back = Some((self.list.clone(), Stage::SeriesSelect));
                     self.list
                         .set_contents(episodes.iter().map(|episode| episode.to_string()).collect());
                     self.stage = Stage::EpisodeSelect;

@@ -29,7 +29,7 @@ anicli-esp -c
 anicli-esp --config
 ```
 ## Interfaz
-Con el tabulador y shift + tabulador se puede cambiar la ventana seleccionada. El enter permite selecionar una opción.
+Con el tabulador y shift + tabulador se puede cambiar la ventana seleccionada. El enter permite selecionar una opción. Desde la lista de episodios, Esc vuelve a la lista anterior.
 ## Likes
 Con la flecha derecha pudes añadir un anime a la lista de animes que te gustan. A la cual puedes acceder presionando ctrl+l
 ## Continuar viendo
