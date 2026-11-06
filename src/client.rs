@@ -1,6 +1,12 @@
 use anyhow::Result;
+use lazy_static::lazy_static;
 
 use crate::config::CONFIG;
+
+lazy_static! {
+    // Un solo cliente para todas las peticiones: reutiliza la conexión entre pasos
+    pub static ref HTTP: reqwest::blocking::Client = reqwest::blocking::Client::new();
+}
 
 pub trait Client {
     fn get_animes(&mut self, query: &str) -> Result<Vec<String>>;

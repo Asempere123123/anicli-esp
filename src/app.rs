@@ -40,6 +40,7 @@ pub struct App {
     series_name: String,
     // Lista desde la que se entró a los episodios, para volver con Esc
     back: Option<(OptionsList, Stage)>,
+    loading: bool,
 
     errors: Vec<String>,
 
@@ -52,6 +53,11 @@ impl App {
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> Result<()> {
         while !self.exit {
             terminal.draw(|frame| self.draw(frame))?;
+            // Enter hace peticiones que bloquean: primero se dibuja "Cargando…" y luego se ejecuta
+            if std::mem::take(&mut self.loading) {
+                self.handle_enter();
+                continue;
+            }
             self.handle_events()?;
         }
 
@@ -100,7 +106,7 @@ impl App {
             }
             KeyCode::BackTab => self.change_focus_backwards(),
             KeyCode::Tab => self.change_focus_forward(),
-            KeyCode::Enter => self.handle_enter(),
+            KeyCode::Enter => self.loading = true,
             _other => match self.focus {
                 Focus::Input => self.input.handle_key_event(key_event),
                 Focus::List => self.list.handle_key_event(key_event),
@@ -431,7 +437,11 @@ impl Widget for &mut App {
             Constraint::Length(1),
             Constraint::Length(1),
         ]);
-        let [search_area, options_area, _, server_area] = layout.areas(area);
+        let [search_area, options_area, status_area, server_area] = layout.areas(area);
+
+        if self.loading {
+            Line::from("Cargando…").yellow().bold().render(status_area, buf);
+        }
 
         // Search bar
         self.input.render(search_area, buf);
