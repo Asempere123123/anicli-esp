@@ -119,6 +119,13 @@ impl App {
     fn handle_switch_liked_menu(&mut self) {
         let config = CONFIG.read().unwrap();
         let liked_animes = config.get_liked_animes();
+        if liked_animes.is_empty() {
+            self.errors.push(
+                "No tienes animes favoritos. Marca uno con la flecha derecha en los resultados."
+                    .to_owned(),
+            );
+            return;
+        }
         self.list
             .set_contents(liked_animes.iter().cloned().collect());
         self.stage = Stage::SeriesSelect;
@@ -193,8 +200,16 @@ impl App {
             }
         };
 
-        self.change_focus_forward();
+        if animes.is_empty() {
+            self.errors.push(format!(
+                "No se encontraron resultados para \"{}\".",
+                self.input.content()
+            ));
+            return;
+        }
+
         self.list.set_contents(animes);
+        self.set_focus(Focus::List);
         self.input.clear();
         self.stage = Stage::SeriesSelect;
     }
@@ -328,44 +343,25 @@ impl App {
         self.focus = focus;
     }
 
+    // Una lista vacía con foco no muestra nada y la app parece congelada, así que se salta
     fn change_focus_forward(&mut self) {
-        match self.focus {
-            Focus::Input => {
-                self.input.defocus();
-                self.list.focus();
-                self.focus = Focus::List;
-            }
-            Focus::List => {
-                self.list.defocus();
-                self.servers.focus();
-                self.focus = Focus::Servers;
-            }
-            Focus::Servers => {
-                self.servers.defocus();
-                self.input.focus();
-                self.focus = Focus::Input;
-            }
-        }
+        let next = match self.focus {
+            Focus::Input if self.list.is_empty() => Focus::Servers,
+            Focus::Input => Focus::List,
+            Focus::List => Focus::Servers,
+            Focus::Servers => Focus::Input,
+        };
+        self.set_focus(next);
     }
 
     fn change_focus_backwards(&mut self) {
-        match self.focus {
-            Focus::Input => {
-                self.input.defocus();
-                self.servers.focus();
-                self.focus = Focus::Servers;
-            }
-            Focus::Servers => {
-                self.servers.defocus();
-                self.list.focus();
-                self.focus = Focus::List;
-            }
-            Focus::List => {
-                self.list.defocus();
-                self.input.focus();
-                self.focus = Focus::Input;
-            }
-        }
+        let next = match self.focus {
+            Focus::Input => Focus::Servers,
+            Focus::Servers if self.list.is_empty() => Focus::Input,
+            Focus::Servers => Focus::List,
+            Focus::List => Focus::Input,
+        };
+        self.set_focus(next);
     }
 }
 

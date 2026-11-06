@@ -59,6 +59,10 @@ impl OptionsList {
         self.list_state.select_next();
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.contents.is_empty()
+    }
+
     pub fn select(&mut self, idx: usize) {
         self.list_state.select(Some(idx));
     }
