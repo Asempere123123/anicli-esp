@@ -28,6 +28,11 @@ La primera vez que se abre permite elegir que aplicación se utilizará para abr
 anicli-esp -c
 anicli-esp --config
 ```
+## Ayuda
+Para ver todas las opciones y teclas:
+```bash
+anicli-esp --help
+```
 ## Interfaz
 Con el tabulador y shift + tabulador se puede cambiar la ventana seleccionada. El enter permite selecionar una opción. Desde la lista de episodios, Esc vuelve a la lista anterior. En el buscador, ctrl+u borra el texto.
 ## Likes
