@@ -14,6 +14,7 @@ use crate::config::CONFIG;
 
 const SEARCH_BUFFER_RESET_DURATION: Duration = Duration::from_millis(700);
 
+#[derive(Clone)]
 pub struct OptionsList {
     contents: Vec<String>,
     list_state: ListState,
@@ -57,6 +58,14 @@ impl OptionsList {
 
     fn down(&mut self) {
         self.list_state.select_next();
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.contents.is_empty()
+    }
+
+    pub fn select(&mut self, idx: usize) {
+        self.list_state.select(Some(idx));
     }
 
     pub fn current(&self) -> Option<usize> {

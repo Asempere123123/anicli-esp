@@ -28,7 +28,14 @@ La primera vez que se abre permite elegir que aplicación se utilizará para abr
 anicli-esp -c
 anicli-esp --config
 ```
+## Ayuda
+Para ver todas las opciones y teclas:
+```bash
+anicli-esp --help
+```
 ## Interfaz
-Con el tabulador y shift + tabulador se puede cambiar la ventana seleccionada. El enter permite selecionar una opción.
+Con el tabulador y shift + tabulador se puede cambiar la ventana seleccionada. El enter permite selecionar una opción. Desde la lista de episodios, Esc vuelve a la lista anterior. En el buscador, ctrl+u borra el texto.
 ## Likes
 Con la flecha derecha pudes añadir un anime a la lista de animes que te gustan. A la cual puedes acceder presionando ctrl+l
+## Continuar viendo
+Cada episodio que abres se guarda junto con su serie y servidor. Con ctrl+r se abre la lista de vistos recientemente; al elegir una serie la lista de episodios queda posicionada en el siguiente episodio, así que basta con pulsar enter para seguir.

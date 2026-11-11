@@ -1,13 +1,12 @@
 use anyhow::{anyhow, Result};
 use headless_chrome::{protocol::cdp::Network, Browser};
-use reqwest::blocking;
 use scraper::{Html, Selector};
 use std::{
     sync::{mpsc, Arc},
     time::Duration,
 };
 
-use crate::{client::Client, config::CONFIG, frontend::Frontend};
+use crate::{client::{Client, HTTP}, config::CONFIG, frontend::Frontend};
 
 #[derive(Default)]
 pub struct AnimeFlv {
@@ -18,7 +17,7 @@ pub struct AnimeFlv {
 impl Client for AnimeFlv {
     fn get_animes(&mut self, query: &str) -> Result<Vec<String>> {
         let url = format!("https://www3.animeflv.net/browse?q={query}");
-        let response = blocking::get(url)?;
+        let response = HTTP.get(url).send()?;
         let html = Html::parse_document(&response.text()?);
 
         self.series_links.clear();
@@ -60,7 +59,7 @@ impl Client for AnimeFlv {
     }
 
     fn select_anime(&mut self, idx: usize) -> Result<Vec<i32>> {
-        self.name = self
+        let link = self
             .series_links
             .get(idx)
             .ok_or(std::io::Error::new(
@@ -68,8 +67,17 @@ impl Client for AnimeFlv {
                 "Invalid index",
             ))?
             .to_owned();
+        self.open_series(&link)
+    }
+
+    fn series_link(&self) -> &str {
+        &self.name
+    }
+
+    fn open_series(&mut self, link: &str) -> Result<Vec<i32>> {
+        self.name = link.to_owned();
         let url = format!("https://www3.animeflv.net{}", self.name);
-        let response = blocking::get(url)?;
+        let response = HTTP.get(url).send()?;
         let text = response.text()?;
 
         let pattern = "var episodes = ";
@@ -109,7 +117,7 @@ impl AnimeFlv {
             self.name.replace("anime", "ver"),
             episode
         );
-        let response = blocking::get(url)?;
+        let response = HTTP.get(url).send()?;
         let text = response.text()?;
 
         let pattern;
@@ -148,7 +156,7 @@ impl AnimeFlv {
             self.name.replace("anime", "ver"),
             episode
         );
-        let response = blocking::get(url)?;
+        let response = HTTP.get(url).send()?;
         let text = response.text()?;
 
         let pattern = r#""server":"stape""#;

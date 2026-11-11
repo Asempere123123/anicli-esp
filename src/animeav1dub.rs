@@ -1,8 +1,7 @@
 use anyhow::{Ok, Result};
-use reqwest::blocking;
 use scraper::{Html, Selector};
 
-use crate::{client::Client, config::CONFIG, frontend::Frontend};
+use crate::{client::{Client, HTTP}, config::CONFIG, frontend::Frontend};
 
 #[derive(Default)]
 pub struct AnimeAv1DUB {
@@ -13,7 +12,7 @@ pub struct AnimeAv1DUB {
 impl Client for AnimeAv1DUB {
     fn get_animes(&mut self, query: &str) -> Result<Vec<String>> {
         let url = format!("https://animeav1.com/catalogo?search={}", query);
-        let response = blocking::get(url)?;
+        let response = HTTP.get(url).send()?;
         let html = Html::parse_document(&response.text()?);
 
         self.series_links.clear();
@@ -55,7 +54,7 @@ impl Client for AnimeAv1DUB {
     }
 
     fn select_anime(&mut self, idx: usize) -> Result<Vec<i32>> {
-        self.name = self
+        let link = self
             .series_links
             .get(idx)
             .ok_or(std::io::Error::new(
@@ -63,8 +62,17 @@ impl Client for AnimeAv1DUB {
                 "Invalid index",
             ))?
             .to_owned();
+        self.open_series(&link)
+    }
+
+    fn series_link(&self) -> &str {
+        &self.name
+    }
+
+    fn open_series(&mut self, link: &str) -> Result<Vec<i32>> {
+        self.name = link.to_owned();
         let url = format!("https://animeav1.com{}", self.name);
-        let response = blocking::get(url)?;
+        let response = HTTP.get(url).send()?;
         let html = Html::parse_document(&response.text()?);
 
         let mut episodes = Vec::new();
@@ -103,7 +111,7 @@ impl Client for AnimeAv1DUB {
 impl AnimeAv1DUB {
     fn default_get_episode_link(&mut self, episode: i32) -> Result<String> {
         let url = format!("https://animeav1.com{}/{}", self.name, episode);
-        let response = blocking::get(url)?;
+        let response = HTTP.get(url).send()?;
         let text = response.text()?;
 
         let pattern = r#"embeds:{"#;
@@ -145,7 +153,7 @@ impl AnimeAv1DUB {
     }
 
     fn get_episode_link_mpv(&mut self, link: &str) -> Result<String> {
-        let response = blocking::get(link)?;
+        let response = HTTP.get(link).send()?;
         let text = response.text()?;
 
         let pattern = r#"src: ""#;

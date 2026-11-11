@@ -31,6 +31,27 @@ pub struct Config {
     frontend: Frontend,
     log_file_path: PathBuf,
     liked_animes: BTreeSet<String>,
+    // default: los config.json anteriores no tienen este campo y sin esto no cargarían
+    #[serde(default)]
+    history: Vec<WatchEntry>,
+}
+
+const HISTORY_LIMIT: usize = 50;
+
+/// Último episodio abierto de una serie
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct WatchEntry {
+    pub name: String,
+    pub server: Server,
+    pub link: String,
+    pub episode: i32,
+}
+
+/// Deja `entry` al principio, sin duplicar la serie y con un máximo de HISTORY_LIMIT entradas
+fn push_history(history: &mut Vec<WatchEntry>, entry: WatchEntry) {
+    history.retain(|e| !(e.server == entry.server && e.link == entry.link));
+    history.insert(0, entry);
+    history.truncate(HISTORY_LIMIT);
 }
 
 impl Config {
@@ -52,6 +73,7 @@ impl Config {
             frontend: Frontend::DefaultBrowser,
             log_file_path: PathBuf::new(),
             liked_animes: BTreeSet::new(),
+            history: Vec::new(),
         })
     }
 
@@ -80,6 +102,16 @@ impl Config {
         if !self.liked_animes.remove(series) {
             self.liked_animes.insert(series.to_owned());
         }
+
+        self.save();
+    }
+
+    pub fn get_history(&self) -> &[WatchEntry] {
+        &self.history
+    }
+
+    pub fn record_watch(&mut self, entry: WatchEntry) {
+        push_history(&mut self.history, entry);
 
         self.save();
     }
@@ -154,11 +186,18 @@ impl ConfigApp {
     fn run_internal(&mut self, terminal: &mut DefaultTerminal) -> Result<()> {
         let dirs = directories::ProjectDirs::from("", "", "ani-cli-es")
             .expect("Could not get the config dir");
+        // Con --config se conservan likes e historial en vez de empezar de cero
+        let (liked_animes, history) = self
+            .config
+            .take()
+            .map(|config| (config.liked_animes, config.history))
+            .unwrap_or_default();
         self.config = Some(Config {
             client: Server::AnimeAv1,
             frontend: self.run_select_frontend(terminal)?,
             log_file_path: dirs.data_dir().join("logs"),
-            liked_animes: BTreeSet::new(),
+            liked_animes,
+            history,
         });
 
         Ok(())
@@ -236,5 +275,51 @@ impl Widget for &mut ConfigApp {
             FRONTENDS[self.frontend_state.selected().unwrap_or_default()].description,
         );
         hint.render(tip_area, buf);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn entry(link: &str, episode: i32) -> WatchEntry {
+        WatchEntry {
+            name: link.to_owned(),
+            server: Server::AnimeAv1,
+            link: link.to_owned(),
+            episode,
+        }
+    }
+
+    #[test]
+    fn push_history_moves_series_to_front_without_duplicates() {
+        let mut history = vec![entry("/a", 1), entry("/b", 3)];
+        push_history(&mut history, entry("/b", 4));
+        assert_eq!(history, vec![entry("/b", 4), entry("/a", 1)]);
+
+        // Misma serie en otro servidor es otra entrada
+        let mut dub = entry("/a", 2);
+        dub.server = Server::AnimeAv1DUB;
+        push_history(&mut history, dub.clone());
+        assert_eq!(history.len(), 3);
+        assert_eq!(history[0], dub);
+    }
+
+    #[test]
+    fn push_history_is_capped() {
+        let mut history = Vec::new();
+        for i in 0..HISTORY_LIMIT + 5 {
+            push_history(&mut history, entry(&format!("/{i}"), 1));
+        }
+        assert_eq!(history.len(), HISTORY_LIMIT);
+        assert_eq!(history[0].link, format!("/{}", HISTORY_LIMIT + 4));
+    }
+
+    #[test]
+    fn old_config_without_history_still_loads() {
+        let json = r#"{"client":"AnimeAv1","frontend":"Mpv","log_file_path":"/tmp/x","liked_animes":["Foo"]}"#;
+        let config: Config = serde_json::from_str(json).unwrap();
+        assert!(config.history.is_empty());
+        assert!(config.liked_animes.contains("Foo"));
     }
 }

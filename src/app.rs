@@ -8,7 +8,7 @@ use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::DefaultTerminal;
 
 use crate::client::Client;
-use crate::config::CONFIG;
+use crate::config::{WatchEntry, CONFIG};
 use crate::input::Input;
 use crate::list::OptionsList;
 use crate::logging::spawn_logger;
@@ -22,11 +22,13 @@ enum Focus {
     Servers,
 }
 
-#[derive(Default, PartialEq, Eq)]
+#[derive(Default, PartialEq, Eq, Clone, Copy)]
 enum Stage {
     #[default]
     SeriesSelect,
     EpisodeSelect,
+    History,
+    Liked,
 }
 
 #[derive(Default)]
@@ -35,6 +37,10 @@ pub struct App {
     focus: Focus,
     client: Box<dyn Client>,
     stage: Stage,
+    series_name: String,
+    // Lista desde la que se entró a los episodios, para volver con Esc
+    back: Option<(OptionsList, Stage)>,
+    loading: bool,
 
     errors: Vec<String>,
 
@@ -47,6 +53,11 @@ impl App {
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> Result<()> {
         while !self.exit {
             terminal.draw(|frame| self.draw(frame))?;
+            // Enter hace peticiones que bloquean: primero se dibuja "Cargando…" y luego se ejecuta
+            if std::mem::take(&mut self.loading) {
+                self.handle_enter();
+                continue;
+            }
             self.handle_events()?;
         }
 
@@ -80,17 +91,22 @@ impl App {
             {
                 self.exit = true
             }
+            KeyCode::Esc if self.stage == Stage::EpisodeSelect => self.handle_back(),
             KeyCode::Char('l') if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.handle_switch_liked_menu()
             }
+            KeyCode::Char('r') if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.handle_switch_history_menu()
+            }
             KeyCode::Right | KeyCode::Left
-                if self.stage == Stage::SeriesSelect && self.focus == Focus::List =>
+                if matches!(self.stage, Stage::SeriesSelect | Stage::Liked)
+                    && self.focus == Focus::List =>
             {
                 self.handle_series_like()
             }
             KeyCode::BackTab => self.change_focus_backwards(),
             KeyCode::Tab => self.change_focus_forward(),
-            KeyCode::Enter => self.handle_enter(),
+            KeyCode::Enter => self.loading = true,
             _other => match self.focus {
                 Focus::Input => self.input.handle_key_event(key_event),
                 Focus::List => self.list.handle_key_event(key_event),
@@ -114,11 +130,96 @@ impl App {
     fn handle_switch_liked_menu(&mut self) {
         let config = CONFIG.read().unwrap();
         let liked_animes = config.get_liked_animes();
+        if liked_animes.is_empty() {
+            self.errors.push(
+                "No tienes animes favoritos. Marca uno con la flecha derecha en los resultados."
+                    .to_owned(),
+            );
+            return;
+        }
         self.list
             .set_contents(liked_animes.iter().cloned().collect());
-        self.stage = Stage::SeriesSelect;
+        self.stage = Stage::Liked;
         self.input.clear();
         self.set_focus(Focus::List);
+    }
+
+    fn handle_switch_history_menu(&mut self) {
+        let config = CONFIG.read().unwrap();
+        // Sin esto queda el foco en una lista vacía y la app parece congelada
+        if config.get_history().is_empty() {
+            self.errors
+                .push("Todavía no has visto ningún episodio. Cuando abras uno aparecerá aquí.".to_owned());
+            return;
+        }
+        self.list.set_contents(
+            config
+                .get_history()
+                .iter()
+                .map(|e| format!("{} · ep {} · {:?}", e.name, e.episode, e.server))
+                .collect(),
+        );
+        self.stage = Stage::History;
+        self.input.clear();
+        self.set_focus(Focus::List);
+    }
+
+    fn handle_enter_history(&mut self) {
+        let Some(entry) = self
+            .list
+            .current()
+            .and_then(|idx| CONFIG.read().unwrap().get_history().get(idx).cloned())
+        else {
+            return;
+        };
+
+        self.client = self.servers.set(entry.server);
+        let episodes = match self.client.open_series(&entry.link) {
+            Result::Ok(episodes) => episodes,
+            Err(e) => {
+                self.errors.push(e.to_string());
+                return;
+            }
+        };
+        // El cursor queda en el siguiente episodio, o en el último visto si no hay siguiente
+        let resume = episodes
+            .iter()
+            .position(|&ep| ep == entry.episode + 1)
+            .or_else(|| episodes.iter().position(|&ep| ep == entry.episode));
+
+        self.series_name = entry.name;
+        self.back = Some((self.list.clone(), Stage::History));
+        self.list
+            .set_contents(episodes.iter().map(|episode| episode.to_string()).collect());
+        if let Some(idx) = resume {
+            self.list.select(idx);
+        }
+        self.stage = Stage::EpisodeSelect;
+    }
+
+    fn handle_back(&mut self) {
+        match self.back.take() {
+            // El historial se reordena al ver un episodio: se regenera y se vuelve a esta serie
+            Some((_, Stage::History)) => {
+                self.handle_switch_history_menu();
+                let link = self.client.series_link();
+                let idx = CONFIG
+                    .read()
+                    .unwrap()
+                    .get_history()
+                    .iter()
+                    .position(|e| e.link == link);
+                if let Some(idx) = idx {
+                    self.list.select(idx);
+                }
+            }
+            Some((list, stage)) => {
+                self.list = list;
+                self.stage = stage;
+                self.set_focus(Focus::List);
+            }
+            None => (),
+        }
     }
 
     fn handle_series_like(&mut self) {
@@ -136,34 +237,69 @@ impl App {
             }
         };
 
-        self.change_focus_forward();
+        if animes.is_empty() {
+            self.errors.push(format!(
+                "No se encontraron resultados para \"{}\".",
+                self.input.content()
+            ));
+            return;
+        }
+
         self.list.set_contents(animes);
+        self.set_focus(Focus::List);
         self.input.clear();
         self.stage = Stage::SeriesSelect;
+    }
+
+    /// Abre la serie `idx` de la última búsqueda del cliente; `from` es a dónde vuelve Esc
+    fn enter_series(&mut self, idx: usize, from: Stage) {
+        let episodes = match self.client.select_anime(idx) {
+            Result::Ok(episodes) => episodes,
+            Err(e) => {
+                self.errors.push(e.to_string());
+                return;
+            }
+        };
+        self.series_name = self.list.current_value().unwrap_or_default().to_owned();
+        self.back = Some((self.list.clone(), from));
+        self.list
+            .set_contents(episodes.iter().map(|episode| episode.to_string()).collect());
+        self.stage = Stage::EpisodeSelect;
+    }
+
+    // Los likes solo guardan el nombre: se busca en el servidor actual y se abre el que coincide
+    fn handle_enter_liked(&mut self) {
+        let Some(name) = self.list.current_value().map(str::to_owned) else {
+            return;
+        };
+        let found = match self.client.get_animes(&name) {
+            Result::Ok(animes) => animes.iter().position(|anime| *anime == name),
+            Err(e) => {
+                self.errors.push(e.to_string());
+                return;
+            }
+        };
+        match found {
+            Some(idx) => self.enter_series(idx, Stage::Liked),
+            None => self.errors.push(format!(
+                "\"{name}\" no aparece en este servidor. Prueba con otro (Tab hasta los servidores)."
+            )),
+        }
     }
 
     fn handle_enter_list(&mut self) {
         match self.stage {
             Stage::SeriesSelect => {
                 if let Some(selected) = self.list.current() {
-                    let episodes = match self.client.select_anime(selected) {
-                        Result::Ok(episodes) => episodes,
-                        Err(e) => {
-                            self.errors.push(e.to_string());
-                            return;
-                        }
-                    };
-                    self.list
-                        .set_contents(episodes.iter().map(|episode| episode.to_string()).collect());
-                    self.stage = Stage::EpisodeSelect;
+                    self.enter_series(selected, Stage::SeriesSelect);
                 }
             }
+            Stage::Liked => self.handle_enter_liked(),
+            Stage::History => self.handle_enter_history(),
             Stage::EpisodeSelect => {
                 if let Some(selected) = self.list.current_value() {
-                    let episode_link = match self
-                        .client
-                        .get_episode_link(i32::from_str_radix(&selected, 10).unwrap())
-                    {
+                    let episode = i32::from_str_radix(&selected, 10).unwrap();
+                    let episode_link = match self.client.get_episode_link(episode) {
                         Result::Ok(link) => link,
                         Err(e) => {
                             self.errors.push(e.to_string());
@@ -230,6 +366,15 @@ impl App {
                             };
                         }
                     }
+
+                    // Fuera del match y en dos pasos: CONFIG no admite read y write a la vez
+                    let server = CONFIG.read().unwrap().get_server();
+                    CONFIG.write().unwrap().record_watch(WatchEntry {
+                        name: self.series_name.clone(),
+                        server,
+                        link: self.client.series_link().to_owned(),
+                        episode,
+                    });
                 }
             }
         }
@@ -262,44 +407,25 @@ impl App {
         self.focus = focus;
     }
 
+    // Una lista vacía con foco no muestra nada y la app parece congelada, así que se salta
     fn change_focus_forward(&mut self) {
-        match self.focus {
-            Focus::Input => {
-                self.input.defocus();
-                self.list.focus();
-                self.focus = Focus::List;
-            }
-            Focus::List => {
-                self.list.defocus();
-                self.servers.focus();
-                self.focus = Focus::Servers;
-            }
-            Focus::Servers => {
-                self.servers.defocus();
-                self.input.focus();
-                self.focus = Focus::Input;
-            }
-        }
+        let next = match self.focus {
+            Focus::Input if self.list.is_empty() => Focus::Servers,
+            Focus::Input => Focus::List,
+            Focus::List => Focus::Servers,
+            Focus::Servers => Focus::Input,
+        };
+        self.set_focus(next);
     }
 
     fn change_focus_backwards(&mut self) {
-        match self.focus {
-            Focus::Input => {
-                self.input.defocus();
-                self.servers.focus();
-                self.focus = Focus::Servers;
-            }
-            Focus::Servers => {
-                self.servers.defocus();
-                self.list.focus();
-                self.focus = Focus::List;
-            }
-            Focus::List => {
-                self.list.defocus();
-                self.input.focus();
-                self.focus = Focus::Input;
-            }
-        }
+        let next = match self.focus {
+            Focus::Input => Focus::Servers,
+            Focus::Servers if self.list.is_empty() => Focus::Input,
+            Focus::Servers => Focus::List,
+            Focus::List => Focus::Input,
+        };
+        self.set_focus(next);
     }
 }
 
@@ -311,7 +437,11 @@ impl Widget for &mut App {
             Constraint::Length(1),
             Constraint::Length(1),
         ]);
-        let [search_area, options_area, _, server_area] = layout.areas(area);
+        let [search_area, options_area, status_area, server_area] = layout.areas(area);
+
+        if self.loading {
+            Line::from("Cargando…").yellow().bold().render(status_area, buf);
+        }
 
         // Search bar
         self.input.render(search_area, buf);
